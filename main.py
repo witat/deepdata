@@ -23,7 +23,10 @@ def edit_df(demo, credit, kplus, train, test):
                             right_on = 'cc_no', 
                             how = 'left')
     # convert dtypes file
-    demo.loc[:,['gender','ocp_cd','age']] = demo.loc[:,['gender','ocp_cd','age']].astype('category')
+    demo['age_ocp'] = demo['age'] + demo['ocp_cd']
+    demo.loc[:,['gender','ocp_cd','age']] = demo.loc[:,['age_ocp','gender','ocp_cd','age']].astype('category')
+    
+    demo['age_ocp'] = demo['age_ocp'].astype('category')
     credit['pos_dt'] = pd.to_datetime(credit['pos_dt'])
     credit = credit.dropna(subset = ['cc_txn_amt'])
     kplus['sunday'] = pd.to_datetime(kplus['sunday'])
@@ -49,7 +52,7 @@ demo_ = demo.drop_duplicates(subset = ['id'])
 train_df = train.merge(kplus_trn, 
                         left_on = 'id', 
                         right_on = 'id', 
-                        how = 'inner')
+                        how = 'left')
 train_df = train_df.merge(credit_trn, 
                         left_on = 'id', 
                         right_on = 'id', 
@@ -60,16 +63,21 @@ train_df = train_df.merge(demo_,
                         right_on = 'id', 
                         how = 'left')
 
-train_df = train_df.drop(columns = ['cc_no','id'])
+test_df = test.merge(kplus_trn, 
+                    left_on = 'id', 
+                    right_on = 'id', 
+                    how = 'left')
+test_df = test_df.merge(credit_trn, 
+                    left_on = 'id', 
+                    right_on = 'id', 
+                    how = 'left',
+                    suffixes = ('_kplus','_credit'))
+test_df = test_df.merge(demo_, 
+                        left_on = 'id', 
+                        right_on = 'id', 
+                        how = 'left')
 
-test_df = test.merge(kplus_trn, left_on = 'id', right_on = 'id', how = 'left')
-test_df = test_df.merge(demo_, left_on = 'id', right_on = 'id', how = 'left')
-print(len(train_df[(train_df.income >= 100000)]))
-
-
-
-
-train_df = train_df[(train_df.income >= 0) & (train_df.income < 20000)]
+# train_df = train_df[(train_df.income >= 0) & (train_df.income < 15000)]
 # Train model
 
 features = [c for c in train_df.columns if c not in ['income','id','cc_no']]
@@ -81,12 +89,12 @@ param = {
     'boost_from_average':'false',   
     'boost': 'gbdt',             
     'feature_fraction': 1,     
-    'learning_rate': 0.01,
+    'learning_rate': 0.005,
     'max_depth': -1,             
     'metric':'mape',                
-    'min_data_in_leaf': 80,     
-    'min_sum_hessian_in_leaf': 10.0,
-    'num_leaves': 16,            
+    'min_data_in_leaf': 20,     
+    # 'min_sum_hessian_in_leaf': 10.0,
+    'num_leaves': 32,            
     'num_threads': -1,              
     'tree_learner': 'serial',
     'objective': 'regression',
@@ -109,7 +117,3 @@ for fold_, (trn_idx, val_idx) in enumerate(folds.split(train_df.values, target.v
 
 print("CV score: {:<8.5f}".format(mean_squared_log_error(target, oof)))
 lgb.plot_importance(clf, importance_type='gain', max_num_features=20)
-
-
-
-# len(train_df)
